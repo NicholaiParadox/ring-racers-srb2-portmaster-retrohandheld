@@ -388,6 +388,18 @@ void PR_LoadProfiles(void)
 
 	String datapath { srb2::format("{}/{}", srb2home, PROFILESFILE) };
 
+	{
+		// A zero-length profiles file (power loss / kill while saving on the SD card)
+		// would otherwise be read as a corrupt header. Treat it as "no profiles yet".
+		std::error_code size_ec;
+		std::uintmax_t file_bytes = fs::file_size(fs::path(static_cast<std::string_view>(datapath)), size_ec);
+		if (!size_ec && file_bytes == 0)
+		{
+			PR_AddProfile(dprofile);
+			return;
+		}
+	}
+
 	io::BufferedInputStream<io::FileStream> bis;
 	try
 	{
