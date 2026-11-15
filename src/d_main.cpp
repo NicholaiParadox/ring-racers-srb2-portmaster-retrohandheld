@@ -359,6 +359,27 @@ gamestate_t wipegamestate = GS_LEVEL;
 INT16 wipetypepre = -1;
 INT16 wipetypepost = -1;
 
+#ifdef SRB2_GLES2
+#include <chrono>
+#include <cstdio>
+namespace
+{
+// R36S diagnostics: where does each frame go? (game logic vs 3D vs 2D/other)
+struct R36SPerf
+{
+	double logic = 0, display = 0, world3d = 0, report_t = 0;
+	unsigned tics = 0, iters = 0, displays = 0, worlds = 0;
+	bool have_report = false;
+	static double now()
+	{
+		using clock = std::chrono::steady_clock;
+		return std::chrono::duration<double>(clock::now().time_since_epoch()).count();
+	}
+};
+R36SPerf g_r36s_perf;
+} // namespace
+#endif
+
 static bool D_Display(bool world)
 {
 	bool ranwipe = false;
@@ -625,7 +646,14 @@ static bool D_Display(bool world)
 								topleft = screens[0] + viewwindowy*vid.width + viewwindowx;
 							}
 
+#ifdef SRB2_GLES2
+							double r36s_w0 = R36SPerf::now();
+#endif
 							R_RenderPlayerView();
+#ifdef SRB2_GLES2
+							g_r36s_perf.world3d += R36SPerf::now() - r36s_w0;
+							g_r36s_perf.worlds++;
+#endif
 
 							if (i > 0)
 								M_Memcpy(ylookup, ylookup1, viewheight*sizeof (ylookup[0]));
@@ -967,7 +995,14 @@ void D_SRB2Loop(void)
 			// process tics (but maybe not if realtic == 0)
 			{
 				ZoneScopedN("TryRunTics");
+#ifdef SRB2_GLES2
+				double r36s_l0 = R36SPerf::now();
+#endif
 				TryRunTics(realtics);
+#ifdef SRB2_GLES2
+				g_r36s_perf.logic += R36SPerf::now() - r36s_l0;
+				g_r36s_perf.tics += static_cast<unsigned>(realtics);
+#endif
 			}
 
 			if (lastdraw || singletics || gametic > rendergametic)
@@ -1066,7 +1101,14 @@ void D_SRB2Loop(void)
 					world = false;
 			}
 
+#ifdef SRB2_GLES2
+			double r36s_d0 = R36SPerf::now();
+#endif
 			ranwipe = D_Display(world);
+#ifdef SRB2_GLES2
+			g_r36s_perf.display += R36SPerf::now() - r36s_d0;
+			g_r36s_perf.displays++;
+#endif
 		}
 
 #ifdef HWRENDER
@@ -1108,6 +1150,35 @@ void D_SRB2Loop(void)
 		// post-sleep time is literally being intentionally wasted
 		deltasecs = (double)((INT64)(finishprecise - enterprecise)) / I_GetPrecisePrecision();
 		deltatics = deltasecs * NEWTICRATE;
+
+#ifdef SRB2_GLES2
+		{
+			R36SPerf& pf = g_r36s_perf;
+			pf.iters++;
+			double r36s_now = R36SPerf::now();
+			if (!pf.have_report)
+			{
+				pf.report_t = r36s_now;
+				pf.have_report = true;
+			}
+			double span = r36s_now - pf.report_t;
+			if (span >= 5.0)
+			{
+				double tics_d = pf.tics ? static_cast<double>(pf.tics) : 1.0;
+				double worlds_d = pf.worlds ? static_cast<double>(pf.worlds) : 1.0;
+				std::fprintf(stderr,
+					"[r36s] PERF %.0fs: bucles=%u | tics=%u (%.1f/s) logica=%.0f ms (%.1f ms/tic) | "
+					"D_Display=%u llamadas %.0f ms | 3D=%u cuadros %.0f ms (%.1f ms/3D) | otros=%.0f ms\n",
+					span, pf.iters, pf.tics, pf.tics / span, pf.logic * 1000.0, pf.logic * 1000.0 / tics_d,
+					pf.displays, pf.display * 1000.0, pf.worlds, pf.world3d * 1000.0, pf.world3d * 1000.0 / worlds_d,
+					span * 1000.0 - pf.logic * 1000.0 - pf.display * 1000.0);
+				std::fflush(stderr);
+				pf.logic = pf.display = pf.world3d = 0;
+				pf.tics = pf.iters = pf.displays = pf.worlds = 0;
+				pf.report_t = r36s_now;
+			}
+		}
+#endif
 
 		// If time spent this game loop exceeds a single tic,
 		// it's probably because of rendering.
