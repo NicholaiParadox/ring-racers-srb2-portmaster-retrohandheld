@@ -54,8 +54,8 @@ extern SDL_Window *window;
 #include "v_video.h"
 
 #ifdef SRB2_GLES2
+#include <chrono>
 #include <cstdio>
-#include <ctime>
 namespace
 {
 // R36S diagnostics: every 5 s print FPS, frame time and time spent presenting.
@@ -63,11 +63,11 @@ struct R36SFrameStats
 {
 	double last_report = 0, last_entry = 0, in_func = 0, worst = 0;
 	unsigned frames = 0;
+	bool have_entry = false, have_report = false;
 	static double now()
 	{
-		timespec ts;
-		clock_gettime(CLOCK_MONOTONIC, &ts);
-		return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) * 1e-9;
+		using clock = std::chrono::steady_clock;
+		return std::chrono::duration<double>(clock::now().time_since_epoch()).count();
 	}
 };
 R36SFrameStats g_r36s_stats;
@@ -78,9 +78,10 @@ struct R36SFrameScope
 	R36SFrameScope() : t0(R36SFrameStats::now())
 	{
 		auto& s = g_r36s_stats;
-		if (s.last_entry > 0 && t0 - s.last_entry > s.worst)
+		if (s.have_entry && t0 - s.last_entry > s.worst)
 			s.worst = t0 - s.last_entry;
 		s.last_entry = t0;
+		s.have_entry = true;
 	}
 	~R36SFrameScope()
 	{
@@ -88,8 +89,11 @@ struct R36SFrameScope
 		double t1 = R36SFrameStats::now();
 		s.in_func += t1 - t0;
 		s.frames++;
-		if (s.last_report == 0)
+		if (!s.have_report)
+		{
 			s.last_report = t0;
+			s.have_report = true;
+		}
 		if (t1 - s.last_report >= 5.0)
 		{
 			double span = t1 - s.last_report;
