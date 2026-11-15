@@ -1,0 +1,27 @@
+name: build-r36s
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+jobs:
+  build:
+    # Runner ARM64 nativo de GitHub: no hace falta compilador cruzado ni Docker.
+    # Ubuntu 24.04 (glibc 2.39) produce binarios que corren en Debian 13 (glibc 2.41).
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@v4
+      - name: Dependencias
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y build-essential cmake ninja-build pkg-config git curl \
+            libsdl2-dev libpng-dev zlib1g-dev libcurl4-openssl-dev libopus-dev \
+            libegl-dev libgles-dev libdrm-dev libgbm-dev
+      - name: Compilar
+        run: |
+          chmod +x build-r36s.sh packaging/r36s/*.sh
+          ./build-r36s.sh native
+          ./build-r36s.sh package
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ringracers-r36s
+          path: dist/*

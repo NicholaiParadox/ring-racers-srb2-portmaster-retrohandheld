@@ -597,8 +597,8 @@ rhi::Handle<rhi::Program> Gles2Rhi::create_program(const ProgramDesc& desc)
 	srb2::Vector<const char*> frag_sources;
 	ShaderLoadContext vert_ctx;
 	ShaderLoadContext frag_ctx;
-	vert_ctx.set_version("100\nprecision mediump float;\nprecision mediump int;");
-	frag_ctx.set_version("100\nprecision mediump float;\nprecision mediump int;");
+	vert_ctx.set_version("100\nprecision highp float;\nprecision highp int;");
+	frag_ctx.set_version("100\n#ifdef GL_FRAGMENT_PRECISION_HIGH\nprecision highp float;\n#else\nprecision mediump float;\n#endif\nprecision mediump int;");
 	for (auto def : desc.defines)
 	{
 		vert_ctx.define(def);

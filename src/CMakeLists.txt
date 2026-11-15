@@ -449,6 +449,13 @@ if(${SRB2_CONFIG_HAVE_PNG} AND ${SRB2_CONFIG_HAVE_ZLIB})
 	endif()
 endif()
 
+# R36S / GLES2 builds: the legacy fixed-function renderer (r_opengl) needs desktop
+# GL 1.x + libGLU and cannot run on OpenGL ES only GPUs (Mali-G31). Disable it.
+if(SRB2_GLES2 AND SRB2_CONFIG_HWRENDER)
+	message(STATUS "SRB2_GLES2: forcing SRB2_CONFIG_HWRENDER=OFF (legacy GL is not available on GLES)")
+	set(SRB2_CONFIG_HWRENDER OFF)
+endif()
+
 if("${SRB2_CONFIG_HWRENDER}")
 	target_compile_definitions(SRB2SDL2 PRIVATE -DHWRENDER)
 	add_subdirectory(hardware)

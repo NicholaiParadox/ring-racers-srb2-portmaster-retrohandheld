@@ -301,6 +301,17 @@ consvar_t cv_addons_showall = Player("addons_showall", "No").yes_no();
 consvar_t cv_alttitle = Player("alttitle", "Off").on_off();
 consvar_t cv_alwaysgrabmouse = GraphicsDriver("alwaysgrabmouse", "Off").on_off();
 
+// R36S port: Start+Select quit combo. "quitcombo" toggles it; the other two
+// select the raw joystick button indices used on pads without a
+// SDL_GameController mapping (defaults match the usual evdev layout).
+consvar_t cv_quitcombo = Console("quitcombo", "On").on_off();
+consvar_t cv_quitcombo_select = Console("quitcombo_select", "8").min_max(0, 20);
+consvar_t cv_quitcombo_start = Console("quitcombo_start", "9").min_max(0, 20);
+// R36S port: START behaves like ESC on PC (pause menu / go back).
+consvar_t cv_startpause = Console("startpause", "On").on_off();
+// R36S port (Odroid Go Super gamepad): D-pad also feeds the left stick axes.
+consvar_t cv_dpadasstick = Console("dpadasstick", "On").on_off();
+
 consvar_t cv_apng_delay = Player("apng_speed", "1x").values({
 	{1, "1x"},
 	{2, "1/2x"},
@@ -453,7 +464,12 @@ consvar_t cv_scr_depth = Player("scr_depth", "16 bits").values({{8, "8 bits"}, {
 //added : 03-02-98: default screen mode, as loaded/saved in config
 consvar_t cv_scr_width = Player("scr_width", "640").values(CV_Unsigned);
 consvar_t cv_scr_height = Player("scr_height", "400").values(CV_Unsigned);
+#ifdef SRB2_GLES2
+// R36S (Mali-G31): the plain nearest blit is by far the cheapest and safest shader.
+consvar_t cv_scr_effect = Player("scr_effect", "Nearest").values({{0, "Nearest"}, {1, "Sharp Bilinear"}, {2, "SalCRT"}, {3, "SalCRT Sharp"}}).save();
+#else
 consvar_t cv_scr_effect = Player("scr_effect", "Sharp Bilinear").values({{0, "Nearest"}, {1, "Sharp Bilinear"}, {2, "SalCRT"}, {3, "SalCRT Sharp"}}).save();
+#endif
 
 consvar_t cv_scr_scale = Player("scr_scale", "1.0").floating_point();
 consvar_t cv_scr_x = Player("scr_x", "0.0").floating_point();

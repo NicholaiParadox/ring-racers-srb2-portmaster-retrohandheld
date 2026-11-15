@@ -1,0 +1,21 @@
+# gamecontrollerdb.txt -- mapeos para el port de Ring Racers en R36S (dArkOSRE)
+#
+# El gamepad interno del R36S bajo dArkOSRE/dArkOS se presenta ante SDL2 con el
+# nombre "GO-Super Gamepad" y GUID 190000004b4800000011000000010000 (es el mismo
+# mapeo que usa PortMaster / es_input.cfg en estos firmwares).
+#
+# Ring Racers carga este archivo automaticamente si esta en su directorio de
+# trabajo (srb2path), y ademas el lanzador exporta SDL_GAMECONTROLLERCONFIG_FILE.
+#
+# Si tu mando no responde, comprueba el nombre/GUID reales con:
+#     SDL_GAMECONTROLLERCONFIG= sdl2-jstest --list
+# o mira /proc/bus/input/devices y anade aqui tu propia linea.
+
+# --- R36S / dArkOSRE (identificado como Odroid Go Super) ----------------------
+190000004b4800000011000000010000,GO-Super Gamepad,a:b0,b:b1,x:b2,y:b3,back:b8,guide:b10,start:b9,leftstick:b11,rightstick:b12,leftshoulder:b4,rightshoulder:b5,dpup:b14,dpdown:b15,dpleft:b16,dpright:b17,leftx:a0,lefty:a1,rightx:a2,righty:a3,lefttrigger:b6,righttrigger:b7,platform:Linux,
+
+# --- Variantes "play_joystick" de clones R36XX / R36H -------------------------
+19000f6a706c61795f6a6f7973746900,play_joystick,a:b0,b:b1,x:b2,y:b3,back:b8,guide:b13,start:b9,leftstick:b11,rightstick:b12,leftshoulder:b4,rightshoulder:b5,dpup:b14,dpdown:b15,dpleft:b16,dpright:b17,leftx:a0,lefty:a3,rightx:a2,righty:a1,lefttrigger:b6,righttrigger:b7,platform:Linux,
+
+# --- Gamepads USB genericos (Xbox / 8BitDo / DualShock en modo XInput) --------
+030000005e0400008e02000000000000,Xbox 360 Controller,a:b0,b:b1,back:b6,dpdown:b12,dpleft:b13,dpright:b14,dpup:b11,guide:b8,leftshoulder:b4,leftstick:b9,lefttrigger:a2,leftx:a0,lefty:a1,rightshoulder:b5,rightstick:b10,righttrigger:a5,rightx:a3,righty:a4,start:b7,x:b2,y:b3,platform:Linux,

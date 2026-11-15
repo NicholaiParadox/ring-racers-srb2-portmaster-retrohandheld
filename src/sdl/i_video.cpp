@@ -22,7 +22,15 @@
 #include <imgui.h>
 
 #include "../rhi/rhi.hpp"
-#ifdef ANDROID
+
+// dArkOSRE / R36S port: allow the GLES2 rendering backend on any platform
+// (not only Android) by compiling with -DSRB2_GLES2.
+// Mali-G31 (RK3326) only exposes OpenGL ES, so the handheld build uses this.
+#if defined(ANDROID) || defined(__ANDROID__) || defined(SRB2_GLES2)
+#define SRB2_USE_GLES2 1
+#endif
+
+#ifdef SRB2_USE_GLES2
 #include "../rhi/gles2/gles2_rhi.hpp"
 #include "rhi_gles2_platform.hpp"
 #else
@@ -144,7 +152,8 @@ static       SDL_bool    borderlesswindow = SDL_FALSE;
 
 // SDL2 vars
 SDL_Window   *window;
-static SDL_GLContext sdlglcontext = nullptr;
+// NOTE (R36S port): `sdlglcontext` is defined in ogl_sdl.c (C linkage, see
+// ogl_sdl.h); do not re-define it here as static, it breaks extern "C".
 static SDL_bool      havefocus = SDL_TRUE;
 static const char *fallback_resolution_name = "Fallback";
 
@@ -357,6 +366,11 @@ static INT32 Impl_SDL_Scancode_To_Keycode(SDL_Scancode code)
 }
 
 extern "C" consvar_t cv_alwaysgrabmouse;
+extern "C" consvar_t cv_quitcombo;
+extern "C" consvar_t cv_quitcombo_select;
+extern "C" consvar_t cv_quitcombo_start;
+extern "C" consvar_t cv_startpause;
+extern "C" consvar_t cv_dpadasstick;
 
 static boolean IgnoreMouse(void)
 {
@@ -654,6 +668,244 @@ static void Impl_HandleMouseWheelEvent(SDL_MouseWheelEvent evt)
 	}
 }
 
+// ------------------------------------------------------------------------
+// R36S port (Odroid Go Super gamepad): duplicate the D-pad onto the left
+// stick axes, so the D-pad works everywhere the stick does. Enabled with
+// the "dpadasstick" cvar (On by default).
+// ------------------------------------------------------------------------
+
+static void Impl_PostDpadAsStickAxis(INT32 device, boolean up, boolean down,
+	boolean left, boolean right)
+{
+	event_t event;
+
+	if (!cv_dpadasstick.value)
+	{
+		return;
+	}
+
+	event.type = ev_gamepad_axis;
+	event.device = device;
+	event.data1 = 0; // axis pair 0 = left stick
+	event.data2 = (right ? 32767 : 0) - (left ? 32767 : 0);
+	event.data3 = (down ? 32767 : 0) - (up ? 32767 : 0);
+	D_PostEvent(&event);
+}
+
+// ------------------------------------------------------------------------
+// R36S port: raw SDL_Joystick fallback for gamepads that have no
+// SDL_GameController mapping (common on retro-handheld firmwares).
+// ------------------------------------------------------------------------
+
+static boolean Impl_IsRawJoystick(SDL_JoystickID which)
+{
+	return !SDL_IsGameController(which);
+}
+
+// Start+Select quit combo for unmapped pads. Button indices follow the raw
+// joystick button order and are configurable from the console
+// (quitcombo_select / quitcombo_start, defaults 8 and 9).
+static void Impl_CheckRawQuitCombo(SDL_Joystick *joystick, Uint8 button)
+{
+	INT32 sel, sta;
+
+	if (!cv_quitcombo.value || joystick == NULL)
+	{
+		return;
+	}
+
+	sel = cv_quitcombo_select.value;
+	sta = cv_quitcombo_start.value;
+
+	if (button != sel && button != sta)
+	{
+		return;
+	}
+
+	if (SDL_JoystickGetButton(joystick, sel) && SDL_JoystickGetButton(joystick, sta))
+	{
+		CONS_Printf("Quit combo (Start+Select) pressed - exiting.\n");
+		LUA_HookBool(true, HOOK(GameQuit));
+		I_Quit();
+	}
+}
+
+static void Impl_HandleJoystickAxisEvent(SDL_JoyAxisEvent evt)
+{
+	event_t event;
+	INT32 value;
+
+	if (!Impl_IsRawJoystick(evt.which))
+	{
+		return;
+	}
+
+	if (evt.axis > 2 * JOYAXISSETS)
+	{
+		return;
+	}
+
+	event.type = ev_gamepad_axis;
+
+	event.device = 1 + evt.which;
+	if (event.device == INT32_MAX)
+	{
+		return;
+	}
+
+	event.data1 = event.data2 = event.data3 = INT32_MAX;
+
+	value = SDLJoyAxis(evt.value, evt.which);
+
+	if (evt.axis & 1)
+	{
+		event.data3 = value;
+	}
+	else
+	{
+		event.data2 = value;
+	}
+
+	event.data1 = evt.axis / 2;
+
+	D_PostEvent(&event);
+}
+
+static void Impl_HandleJoystickHatEvent(SDL_JoyHatEvent evt)
+{
+	// Only the first hat is exposed (the engine reserves KEY_HAT1..KEY_HAT1+3).
+	static Uint8 hatstate = 0;
+	static const Uint8 hatflags[4] = { SDL_HAT_UP, SDL_HAT_DOWN, SDL_HAT_LEFT, SDL_HAT_RIGHT };
+	Uint8 before, after;
+	INT32 i;
+	event_t event;
+
+	if (!Impl_IsRawJoystick(evt.which) || evt.hat != 0)
+	{
+		return;
+	}
+
+	before = hatstate;
+	after = evt.value;
+	hatstate = after;
+
+	for (i = 0; i < 4; i++)
+	{
+		boolean was = (before & hatflags[i]) != 0;
+		boolean now = (after & hatflags[i]) != 0;
+
+		if (was == now)
+		{
+			continue;
+		}
+
+		event.type = now ? ev_keydown : ev_keyup;
+		event.device = 1 + evt.which;
+		event.data1 = KEY_HAT1 + i;
+		event.data2 = 0;
+		D_PostEvent(&event);
+	}
+
+	// R36S port: D-pad also drives the left stick axes.
+	Impl_PostDpadAsStickAxis(1 + evt.which,
+		(after & SDL_HAT_UP) != 0,
+		(after & SDL_HAT_DOWN) != 0,
+		(after & SDL_HAT_LEFT) != 0,
+		(after & SDL_HAT_RIGHT) != 0);
+}
+
+static void Impl_HandleJoystickButtonEvent(SDL_JoyButtonEvent evt, Uint32 type)
+{
+	event_t event;
+	SDL_Joystick *joystick;
+
+	if (!Impl_IsRawJoystick(evt.which))
+	{
+		return; // handled through the SDL_GameController API
+	}
+
+	joystick = SDL_JoystickFromInstanceID(evt.which);
+
+	Impl_CheckRawQuitCombo(joystick, evt.button);
+
+	// R36S port: START acts as ESC (pause menu / go back), like on PC.
+	// SELECT held means the quit combo takes over instead.
+	if (cv_startpause.value
+		&& evt.button == (Uint8)cv_quitcombo_start.value
+		&& (joystick == NULL
+			|| !SDL_JoystickGetButton(joystick, cv_quitcombo_select.value)))
+	{
+		if (type == SDL_JOYBUTTONDOWN || type == SDL_JOYBUTTONUP)
+		{
+			event.type = (type == SDL_JOYBUTTONDOWN) ? ev_keydown : ev_keyup;
+			event.device = 1 + evt.which;
+			event.data1 = KEY_ESCAPE;
+			event.data2 = 0;
+			D_PostEvent(&event);
+		}
+		return;
+	}
+
+	// The engine exposes 11 joystick buttons (KEY_JOY1 .. KEY_JOY1+10).
+	if (evt.button >= 11)
+	{
+		return;
+	}
+
+	event.device = 1 + evt.which;
+
+	if (event.device == INT32_MAX)
+	{
+		return;
+	}
+
+	event.data1 = KEY_JOY1;
+	event.data2 = 0;
+
+	if (type == SDL_JOYBUTTONUP)
+	{
+		event.type = ev_keyup;
+	}
+	else if (type == SDL_JOYBUTTONDOWN)
+	{
+		event.type = ev_keydown;
+	}
+	else
+	{
+		return;
+	}
+
+	event.data1 += evt.button;
+
+	D_PostEvent(&event);
+}
+
+static void Impl_HandleJoystickDeviceAddedEvent(SDL_JoyDeviceEvent event)
+{
+	// Non-gamecontroller pads must be opened so their raw events flow.
+	if (SDL_IsGameController(event.which))
+	{
+		return; // handled by Impl_HandleControllerDeviceAddedEvent
+	}
+	SDL_JoystickOpen(event.which);
+}
+
+static void Impl_HandleJoystickDeviceRemovedEvent(SDL_JoyDeviceEvent event)
+{
+	SDL_Joystick *joystick;
+
+	if (SDL_IsGameController(event.which))
+	{
+		return;
+	}
+
+	joystick = SDL_JoystickFromInstanceID(event.which);
+	if (joystick != NULL)
+	{
+		SDL_JoystickClose(joystick);
+	}
+}
+
 static void Impl_HandleControllerAxisEvent(SDL_ControllerAxisEvent evt)
 {
 	event_t event;
@@ -695,6 +947,54 @@ static void Impl_HandleControllerAxisEvent(SDL_ControllerAxisEvent evt)
 static void Impl_HandleControllerButtonEvent(SDL_ControllerButtonEvent evt, Uint32 type)
 {
 	event_t event;
+
+	// R36S port: press Start+Select together to quit the application.
+	SDL_GameController *qc = SDL_GameControllerFromInstanceID(evt.which);
+	if (cv_quitcombo.value
+		&& type == SDL_CONTROLLERBUTTONDOWN
+		&& (evt.button == SDL_CONTROLLER_BUTTON_START || evt.button == SDL_CONTROLLER_BUTTON_BACK)
+		&& qc != NULL
+		&& SDL_GameControllerGetButton(qc, SDL_CONTROLLER_BUTTON_START)
+		&& SDL_GameControllerGetButton(qc, SDL_CONTROLLER_BUTTON_BACK))
+	{
+		CONS_Printf("Quit combo (Start+Select) pressed - exiting.\n");
+		LUA_HookBool(true, HOOK(GameQuit));
+		I_Quit();
+	}
+
+	// R36S port (Odroid Go Super gamepad): D-pad also drives the left stick.
+	if (cv_dpadasstick.value
+		&& evt.button >= SDL_CONTROLLER_BUTTON_DPAD_UP
+		&& evt.button <= SDL_CONTROLLER_BUTTON_DPAD_RIGHT
+		&& qc != NULL)
+	{
+		Impl_PostDpadAsStickAxis(1 + evt.which,
+			SDL_GameControllerGetButton(qc, SDL_CONTROLLER_BUTTON_DPAD_UP),
+			SDL_GameControllerGetButton(qc, SDL_CONTROLLER_BUTTON_DPAD_DOWN),
+			SDL_GameControllerGetButton(qc, SDL_CONTROLLER_BUTTON_DPAD_LEFT),
+			SDL_GameControllerGetButton(qc, SDL_CONTROLLER_BUTTON_DPAD_RIGHT));
+	}
+
+	// R36S port: START acts as ESC (pause menu / go back), like on PC.
+	// SELECT held means the quit combo takes over instead.
+	if (cv_startpause.value
+		&& evt.button == SDL_CONTROLLER_BUTTON_START
+		&& (qc == NULL || !SDL_GameControllerGetButton(qc, SDL_CONTROLLER_BUTTON_BACK)))
+	{
+		if (type == SDL_CONTROLLERBUTTONDOWN || type == SDL_CONTROLLERBUTTONUP)
+		{
+			event.type = (type == SDL_CONTROLLERBUTTONDOWN) ? ev_keydown : ev_keyup;
+			event.device = 1 + evt.which;
+			if (event.device == INT32_MAX)
+			{
+				return;
+			}
+			event.data1 = KEY_ESCAPE;
+			event.data2 = 0;
+			D_PostEvent(&event);
+		}
+		return;
+	}
 
 	event.device = 1 + evt.which;
 
@@ -1013,6 +1313,22 @@ void I_GetEvent(void)
 				break;
 			case SDL_MOUSEWHEEL:
 				Impl_HandleMouseWheelEvent(evt.wheel);
+				break;
+			case SDL_JOYAXISMOTION:
+				Impl_HandleJoystickAxisEvent(evt.jaxis);
+				break;
+			case SDL_JOYHATMOTION:
+				Impl_HandleJoystickHatEvent(evt.jhat);
+				break;
+			case SDL_JOYBUTTONUP:
+			case SDL_JOYBUTTONDOWN:
+				Impl_HandleJoystickButtonEvent(evt.jbutton, evt.type);
+				break;
+			case SDL_JOYDEVICEADDED:
+				Impl_HandleJoystickDeviceAddedEvent(evt.jdevice);
+				break;
+			case SDL_JOYDEVICEREMOVED:
+				Impl_HandleJoystickDeviceRemovedEvent(evt.jdevice);
 				break;
 			case SDL_CONTROLLERAXISMOTION:
 				Impl_HandleControllerAxisEvent(evt.caxis);
@@ -1333,6 +1649,12 @@ static SDL_bool Impl_CreateContext(void)
 		if (!g_legacy_gl_context)
 		{
 			SDL_GL_ResetAttributes();
+#ifdef SRB2_USE_GLES2
+			// R36S port: Mali-G31 exposes OpenGL ES only
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
+			SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
+#endif
 			g_legacy_gl_context = SDL_GL_CreateContext(window);
 		}
 		if (g_legacy_gl_context == NULL)
@@ -1349,7 +1671,7 @@ static SDL_bool Impl_CreateContext(void)
 	if (!sdlglcontext)
 	{
 		SDL_GL_ResetAttributes();
-#ifdef ANDROID
+#ifdef SRB2_USE_GLES2
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_ES);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MAJOR_VERSION, 2);
 		SDL_GL_SetAttribute(SDL_GL_CONTEXT_MINOR_VERSION, 0);
@@ -1369,7 +1691,7 @@ static SDL_bool Impl_CreateContext(void)
 
 	if (!g_rhi)
 	{
-#ifdef ANDROID
+#ifdef SRB2_USE_GLES2
 		std::unique_ptr<rhi::SdlGles2Platform> platform = std::make_unique<rhi::SdlGles2Platform>();
 		platform->window = window;
 		g_rhi = std::make_unique<rhi::Gles2Rhi>(std::move(platform), reinterpret_cast<rhi::Gles2LoadFunc>(SDL_GL_GetProcAddress));

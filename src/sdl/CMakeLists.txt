@@ -13,17 +13,25 @@ target_sources(SRB2SDL2 PRIVATE
 	hwsym_sdl.c
 )
 
-if(ANDROID)
+if(ANDROID OR SRB2_GLES2)
 	target_sources(SRB2SDL2 PRIVATE
 		rhi_gles2_platform.cpp
 		rhi_gles2_platform.hpp
 	)
-	target_compile_definitions(SRB2SDL2 PRIVATE FORCESDLMAIN NOMUMBLE)
+	if(ANDROID)
+		target_compile_definitions(SRB2SDL2 PRIVATE FORCESDLMAIN)
+	endif()
+	target_compile_definitions(SRB2SDL2 PRIVATE NOMUMBLE)
 else()
 	target_sources(SRB2SDL2 PRIVATE
 		rhi_gl2_platform.cpp
 		rhi_gl2_platform.hpp
 	)
+endif()
+
+# R36S port: compile the SDL backend against the GLES2 RHI
+if(SRB2_GLES2)
+	target_compile_definitions(SRB2SDL2 PRIVATE SRB2_GLES2)
 endif()
 
 if(${SRB2_USEASM})
