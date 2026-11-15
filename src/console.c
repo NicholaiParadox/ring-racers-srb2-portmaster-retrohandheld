@@ -1953,13 +1953,15 @@ void CON_SetLoadingProgress(con_loadprogress_t newStep)
 		CONS_Printf("LOADING UPDATE - %s\n", CON_LoadingStrings[con_startup_loadprogress]);
 #ifdef SRB2_GLES2
 	{
-		static double r36s_t0 = 0.0;
-		struct timespec r36s_ts;
-		clock_gettime(CLOCK_MONOTONIC, &r36s_ts);
-		double r36s_now = (double)r36s_ts.tv_sec + (double)r36s_ts.tv_nsec * 1e-9;
-		if (r36s_t0 == 0.0)
+		static time_t r36s_t0;
+		static int r36s_started;
+		time_t r36s_now = time(NULL);
+		if (!r36s_started)
+		{
 			r36s_t0 = r36s_now;
-		fprintf(stderr, "[r36s] +%.1fs LOADING UPDATE - %s\n", r36s_now - r36s_t0, CON_LoadingStrings[con_startup_loadprogress]);
+			r36s_started = 1;
+		}
+		fprintf(stderr, "[r36s] +%lds LOADING UPDATE - %s\n", (long)(r36s_now - r36s_t0), CON_LoadingStrings[con_startup_loadprogress]);
 	}
 #endif
 
