@@ -40,6 +40,12 @@
 #include "g_state.h"
 #include "m_argv.h"
 
+#ifdef SRB2_GLES2
+#define R36S_TRACE(...) ((void)0) // debug trace spam: silenced on the handheld
+#else
+#define R36S_TRACE I_OutputMsg
+#endif
+
 lua_State *gL = NULL;
 
 // List of internal libraries to load from SRB2
@@ -479,35 +485,35 @@ void LUA_ClearState(void)
 	CONS_Printf(M_GetText("Pardon me while I initialize the Lua scripting interface...\n"));
 
 	// allocate state
-	I_OutputMsg("Lua: lua_newstate\n");
+	R36S_TRACE("Lua: lua_newstate\n");
 	L = lua_newstate(LUA_Alloc, NULL);
-	I_OutputMsg("Lua: lua_atpanic\n");
+	R36S_TRACE("Lua: lua_atpanic\n");
 	lua_atpanic(L, LUA_Panic);
 
 	// open base libraries
-	I_OutputMsg("Lua: luaL_openlibs\n");
+	R36S_TRACE("Lua: luaL_openlibs\n");
 	luaL_openlibs(L);
 	lua_settop(L, 0);
 
 	// make LREG_VALID table for all pushed userdata cache.
-	I_OutputMsg("Lua: LREG_VALID\n");
+	R36S_TRACE("Lua: LREG_VALID\n");
 	lua_newtable(L);
 	lua_setfield(L, LUA_REGISTRYINDEX, LREG_VALID);
 
 	// make LREG_METATABLES table for all registered metatables
-	I_OutputMsg("Lua: LREG_METATABLES\n");
+	R36S_TRACE("Lua: LREG_METATABLES\n");
 	lua_newtable(L);
 	lua_setfield(L, LUA_REGISTRYINDEX, LREG_METATABLES);
 
 	// open srb2 libraries
 	for(i = 0; liblist[i]; i++) {
-		I_OutputMsg("Lua: liblist[%d]\n", i);
+		R36S_TRACE("Lua: liblist[%d]\n", i);
 		lua_pushcfunction(L, liblist[i]);
 		lua_call(L, 0, 0);
 	}
 
 	// lock the global namespace
-	I_OutputMsg("Lua: lock namespace\n");
+	R36S_TRACE("Lua: lock namespace\n");
 	lua_getmetatable(L, LUA_GLOBALSINDEX);
 		lua_pushcfunction(L, setglobals);
 		lua_setfield(L, -2, "__newindex");
@@ -516,7 +522,7 @@ void LUA_ClearState(void)
 	lua_pop(L, 1);
 
 	// lua state is ready!
-	I_OutputMsg("Lua: state ready\n");
+	R36S_TRACE("Lua: state ready\n");
 	gL = L;
 }
 
