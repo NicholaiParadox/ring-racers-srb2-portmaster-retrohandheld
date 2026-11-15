@@ -38,6 +38,8 @@
 
 #ifdef HWRENDER
 #include "hardware/hw_main.h"
+#include <time.h>
+#include <stdio.h>
 #endif
 
 #define MAXHUDLINES 20
@@ -1949,6 +1951,17 @@ void CON_SetLoadingProgress(con_loadprogress_t newStep)
 
 	if (con_startup_loadprogress <= LOADED_ALLDONE)
 		CONS_Printf("LOADING UPDATE - %s\n", CON_LoadingStrings[con_startup_loadprogress]);
+#ifdef SRB2_GLES2
+	{
+		static double r36s_t0 = 0.0;
+		struct timespec r36s_ts;
+		clock_gettime(CLOCK_MONOTONIC, &r36s_ts);
+		double r36s_now = (double)r36s_ts.tv_sec + (double)r36s_ts.tv_nsec * 1e-9;
+		if (r36s_t0 == 0.0)
+			r36s_t0 = r36s_now;
+		fprintf(stderr, "[r36s] +%.1fs LOADING UPDATE - %s\n", r36s_now - r36s_t0, CON_LoadingStrings[con_startup_loadprogress]);
+	}
+#endif
 
 	if (con_startup_loadprogress < LOADED_ISTARTUPGRAPHICS) // rendering not possible?
 		return;
