@@ -384,7 +384,10 @@ static inline INT32 W_MakeFileMD5(const char *filename, void *resblock)
 	struct stat md5st;
 	bool have_stat = (stat(filename, &md5st) == 0);
 	if (have_stat && W_ReadMD5Cache(filename, &md5st, resblock))
+	{
+		fprintf(stderr, "[r36s] MD5 cache hit: %s\n", filename);
 		return 0;
+	}
 #endif
 
 	if ((fhandle = fopen(filename, "rb")) != NULL)
@@ -397,6 +400,7 @@ static inline INT32 W_MakeFileMD5(const char *filename, void *resblock)
 			return 1;
 		}
 #ifdef SRB2_GLES2
+		fprintf(stderr, "[r36s] MD5 computed in %.2fs: %s\n", (float)(I_GetTime() - t)/NEWTICRATE, filename);
 		if (have_stat)
 			W_WriteMD5Cache(filename, &md5st, resblock);
 #endif
