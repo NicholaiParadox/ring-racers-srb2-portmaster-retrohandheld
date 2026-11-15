@@ -68,6 +68,7 @@
 #include "i_time.h"
 #include "i_system.h"
 #include "md5.h"
+#include <sys/stat.h>
 #include "lua_script.h"
 #include "g_game.h" // G_SetGameModified
 #include "d_main.h"
@@ -317,6 +318,60 @@ static inline void W_LoadDehackedLumps(UINT16 wadnum, boolean mainfile)
   * \param resblock resulting MD5 checksum
   * \return 0 if MD5 checksum was made, and is at resblock, 1 if error was found
   */
+#if defined(SRB2_GLES2) && !defined(NOMD5)
+// R36S: hashing every multi-hundred-MB pk3 on each launch from an SD card takes
+// a very long time on the Cortex-A35. Cache the digest in "<file>.md5cache",
+// keyed by file size + mtime, so only the first launch pays the cost.
+static bool W_ReadMD5Cache(const char *filename, const struct stat *st, void *resblock)
+{
+	char cachename[1100];
+	snprintf(cachename, sizeof cachename, "%s.md5cache", filename);
+
+	FILE *f = fopen(cachename, "r");
+	if (f == NULL)
+		return false;
+
+	unsigned long long size = 0, mtime = 0;
+	char hex[40] = {0};
+	bool ok = (fscanf(f, "%llu %llu %32s", &size, &mtime, hex) == 3)
+		&& size == (unsigned long long)st->st_size
+		&& mtime == (unsigned long long)st->st_mtime
+		&& strlen(hex) == 32;
+	fclose(f);
+
+	if (!ok)
+		return false;
+
+	UINT8 out[16];
+	for (int i = 0; i < 16; i++)
+	{
+		unsigned v = 0;
+		if (sscanf(hex + 2 * i, "%2x", &v) != 1)
+			return false;
+		out[i] = (UINT8)v;
+	}
+	memcpy(resblock, out, 16);
+	return true;
+}
+
+static void W_WriteMD5Cache(const char *filename, const struct stat *st, const void *resblock)
+{
+	char cachename[1100];
+	snprintf(cachename, sizeof cachename, "%s.md5cache", filename);
+
+	FILE *f = fopen(cachename, "w");
+	if (f == NULL)
+		return; // read-only media: just recompute next time
+
+	const UINT8 *d = (const UINT8 *)resblock;
+	fprintf(f, "%llu %llu ", (unsigned long long)st->st_size, (unsigned long long)st->st_mtime);
+	for (int i = 0; i < 16; i++)
+		fprintf(f, "%02x", d[i]);
+	fprintf(f, "\n");
+	fclose(f);
+}
+#endif
+
 static inline INT32 W_MakeFileMD5(const char *filename, void *resblock)
 {
 #ifdef NOMD5
@@ -324,6 +379,13 @@ static inline INT32 W_MakeFileMD5(const char *filename, void *resblock)
 	memset(resblock, 0x00, 16);
 #else
 	FILE *fhandle;
+
+#ifdef SRB2_GLES2
+	struct stat md5st;
+	bool have_stat = (stat(filename, &md5st) == 0);
+	if (have_stat && W_ReadMD5Cache(filename, &md5st, resblock))
+		return 0;
+#endif
 
 	if ((fhandle = fopen(filename, "rb")) != NULL)
 	{
@@ -334,6 +396,10 @@ static inline INT32 W_MakeFileMD5(const char *filename, void *resblock)
 			fclose(fhandle);
 			return 1;
 		}
+#ifdef SRB2_GLES2
+		if (have_stat)
+			W_WriteMD5Cache(filename, &md5st, resblock);
+#endif
 		CONS_Debug(DBG_SETUP, "MD5 calc for %s took %f seconds\n",
 			filename, (float)(I_GetTime() - t)/NEWTICRATE);
 		fclose(fhandle);
