@@ -154,6 +154,11 @@ static       SDL_bool    borderlesswindow = SDL_FALSE;
 SDL_Window   *window;
 // NOTE (R36S port): `sdlglcontext` is defined in ogl_sdl.c (C linkage, see
 // ogl_sdl.h); do not re-define it here as static, it breaks extern "C".
+#ifndef HWRENDER
+// Without the legacy GL renderer ogl_sdl.c is compiled empty, so the GLES2/RHI
+// path owns its own context handle.
+static SDL_GLContext sdlglcontext = NULL;
+#endif
 static SDL_bool      havefocus = SDL_TRUE;
 static const char *fallback_resolution_name = "Fallback";
 
