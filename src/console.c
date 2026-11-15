@@ -35,11 +35,11 @@
 #include "k_menu.h"
 #include "filesrch.h"
 #include "m_misc.h"
+#include <stdio.h>
+#include <time.h>
 
 #ifdef HWRENDER
 #include "hardware/hw_main.h"
-#include <time.h>
-#include <stdio.h>
 #endif
 
 #define MAXHUDLINES 20
