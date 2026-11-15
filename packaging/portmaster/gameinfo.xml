@@ -1,0 +1,9 @@
+<?xml version="1.0"?>
+<gameList>
+  <game>
+    <path>./RingRacers.sh</path>
+    <name>Dr. Robotnik's Ring Racers</name>
+    <desc>Kart racer based on SRB2. R36S / dArkOS build (OpenGL ES 2.0).</desc>
+    <genre>Racing</genre>
+  </game>
+</gameList>

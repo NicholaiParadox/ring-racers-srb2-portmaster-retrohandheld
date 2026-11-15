@@ -59,7 +59,22 @@ package-only)
 	tar -czf dist/ringracers-r36s.tar.gz -C dist ringracers-r36s
 	echo "==> Package: dist/ringracers-r36s.tar.gz"
 	;;
+portmaster)
+	# PortMaster layout: RingRacers.sh + ringracers/ (+ port.json) -> dist/RingRacers.zip
+	OUT=dist/portmaster
+	rm -rf "$OUT" && mkdir -p "$OUT/ringracers"
+	cp "$BUILD_DIR"/bin/ringracers* "$OUT/ringracers/"
+	chmod +x "$OUT"/ringracers/ringracers*
+	cp packaging/r36s/RingRacers.sh "$OUT/RingRacers.sh"
+	cp packaging/r36s/gamecontrollerdb.txt packaging/r36s/fetch-assets.sh "$OUT/ringracers/"
+	cp packaging/r36s/README-R36S.txt "$OUT/ringracers/README.txt"
+	cp packaging/portmaster/port.json "$OUT/ringracers/port.json"
+	cp packaging/portmaster/gameinfo.xml "$OUT/ringracers/gameinfo.xml"
+	chmod +x "$OUT/RingRacers.sh" "$OUT/ringracers/fetch-assets.sh"
+	(cd "$OUT" && zip -qr ../RingRacers.zip RingRacers.sh ringracers)
+	echo "==> PortMaster package: dist/RingRacers.zip"
+	;;
 *)
-	echo "Usage: $0 {cross|native|package}"; exit 1
+	echo "Usage: $0 {cross|native|package|portmaster}"; exit 1
 	;;
 esac

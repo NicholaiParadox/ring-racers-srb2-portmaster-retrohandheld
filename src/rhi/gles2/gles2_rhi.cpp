@@ -10,6 +10,7 @@
 
 #include "gles2_rhi.hpp"
 
+#include <cstdio>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -381,6 +382,25 @@ Gles2Rhi::Gles2Rhi(std::unique_ptr<Gles2Platform>&& platform, Gles2LoadFunc load
 {
 	gl_ = std::make_unique<GladGLES2Context>();
 	gladLoadGLES2Context(gl_.get(), reinterpret_cast<GLADloadfunc>(load_func));
+
+	// R36S diagnostics: show up in launch.log.
+	auto gl_str = [this](GLenum name) -> const char*
+	{
+		const GLubyte* v = gl_->GetString ? gl_->GetString(name) : nullptr;
+		return v ? reinterpret_cast<const char*>(v) : "(null)";
+	};
+	fprintf(stderr, "[r36s] GL_VENDOR:   %s\n", gl_str(GL_VENDOR));
+	fprintf(stderr, "[r36s] GL_RENDERER: %s\n", gl_str(GL_RENDERER));
+	fprintf(stderr, "[r36s] GL_VERSION:  %s\n", gl_str(GL_VERSION));
+	fprintf(stderr, "[r36s] GLSL:        %s\n", gl_str(GL_SHADING_LANGUAGE_VERSION));
+	fprintf(stderr, "[r36s] GL_EXTENSIONS: %s\n", gl_str(GL_EXTENSIONS));
+	if (gl_->GetIntegerv)
+	{
+		GLint max_tex = 0;
+		gl_->GetIntegerv(GL_MAX_TEXTURE_SIZE, &max_tex);
+		fprintf(stderr, "[r36s] GL_MAX_TEXTURE_SIZE: %d\n", max_tex);
+	}
+	fflush(stderr);
 }
 
 Gles2Rhi::~Gles2Rhi() = default;

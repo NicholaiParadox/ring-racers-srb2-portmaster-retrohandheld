@@ -53,6 +53,62 @@ extern SDL_Window *window;
 #include "st_stuff.h"
 #include "v_video.h"
 
+#ifdef SRB2_GLES2
+#include <cstdio>
+#include <ctime>
+namespace
+{
+// R36S diagnostics: every 5 s print FPS, frame time and time spent presenting.
+struct R36SFrameStats
+{
+	double last_report = 0, last_entry = 0, in_func = 0, worst = 0;
+	unsigned frames = 0;
+	static double now()
+	{
+		timespec ts;
+		clock_gettime(CLOCK_MONOTONIC, &ts);
+		return static_cast<double>(ts.tv_sec) + static_cast<double>(ts.tv_nsec) * 1e-9;
+	}
+};
+R36SFrameStats g_r36s_stats;
+
+struct R36SFrameScope
+{
+	double t0;
+	R36SFrameScope() : t0(R36SFrameStats::now())
+	{
+		auto& s = g_r36s_stats;
+		if (s.last_entry > 0 && t0 - s.last_entry > s.worst)
+			s.worst = t0 - s.last_entry;
+		s.last_entry = t0;
+	}
+	~R36SFrameScope()
+	{
+		auto& s = g_r36s_stats;
+		double t1 = R36SFrameStats::now();
+		s.in_func += t1 - t0;
+		s.frames++;
+		if (s.last_report == 0)
+			s.last_report = t0;
+		if (t1 - s.last_report >= 5.0)
+		{
+			double span = t1 - s.last_report;
+			std::fprintf(
+				stderr,
+				"[r36s] FPS %.1f | frame avg %.1f ms (worst %.1f ms) | present %.1f ms/frame (%.0f%% of time)\n",
+				s.frames / span, span * 1000.0 / s.frames, s.worst * 1000.0,
+				s.in_func * 1000.0 / s.frames, 100.0 * s.in_func / span);
+			std::fflush(stderr);
+			s.last_report = t1;
+			s.in_func = 0;
+			s.worst = 0;
+			s.frames = 0;
+		}
+	}
+};
+} // namespace
+#endif
+
 extern "C" consvar_t cv_scr_scale, cv_scr_x, cv_scr_y;
 
 using namespace srb2;
@@ -251,6 +307,9 @@ void I_StartDisplayUpdate(void)
 void I_FinishUpdate(void)
 {
 	ZoneScoped;
+#ifdef SRB2_GLES2
+	R36SFrameScope r36s_scope;
+#endif
 	if (rendermode == render_none)
 	{
 		FrameMark;

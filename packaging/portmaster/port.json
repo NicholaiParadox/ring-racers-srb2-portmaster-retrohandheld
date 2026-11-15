@@ -1,0 +1,19 @@
+{
+  "version": 4,
+  "name": "ringracers.zip",
+  "items": ["RingRacers.sh", "ringracers"],
+  "items_opt": [],
+  "attr": {
+    "title": "Dr. Robotnik's Ring Racers",
+    "porter": ["R36S port"],
+    "desc": "Kart racer based on SRB2 (v2.4). Native OpenGL ES 2.0 build for the R36S / dArkOS. Game data (.pk3) not included.",
+    "inst": "Copy RingRacers.sh and the ringracers folder to /roms/ports. Put the game .pk3 files inside ringracers/ (see fetch-assets.sh). Launch from Ports.",
+    "genres": ["racing"],
+    "image": {},
+    "rtr": false,
+    "exp": false,
+    "runtime": null,
+    "reqs": [],
+    "arch": ["aarch64"]
+  }
+}

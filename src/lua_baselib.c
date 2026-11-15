@@ -55,6 +55,12 @@
 #include "lua_hook.h" // hook_cmd_running errors
 #include "k_roulette.h"
 
+#ifdef SRB2_GLES2
+#define R36S_TRACE(...) ((void)0) // debug trace spam: silenced on the handheld
+#else
+#define R36S_TRACE I_OutputMsg
+#endif
+
 #define NOHUD if (hud_running)\
 return luaL_error(L, "HUD rendering code should not call this function!");\
 else if (hook_cmd_running)\
@@ -7207,19 +7213,19 @@ static luaL_Reg lib[] = {
 
 int LUA_BaseLib(lua_State *L)
 {
-	I_OutputMsg("LUA_BaseLib: start\n");
+	R36S_TRACE("LUA_BaseLib: start\n");
 	// Set metatable for string
 	lua_pushliteral(L, "");  // dummy string
 	if (lua_getmetatable(L, -1))  // get string metatable
 	{
-		I_OutputMsg("LUA_BaseLib: getmetatable ok\n");
+		R36S_TRACE("LUA_BaseLib: getmetatable ok\n");
 		lua_pushcfunction(L, lib_concat); // push concatination function
 		lua_setfield(L, -2, "__add"); // ... store it as mathematical addition
 		lua_pop(L, 2); // pop metatable and dummy string
 	}
 	else
 	{
-		I_OutputMsg("LUA_BaseLib: no string metatable, creating\n");
+		R36S_TRACE("LUA_BaseLib: no string metatable, creating\n");
 		lua_createtable(L, 0, 1);
 		lua_pushcfunction(L, lib_concat);
 		lua_setfield(L, -2, "__add");
@@ -7227,19 +7233,19 @@ int LUA_BaseLib(lua_State *L)
 		lua_pop(L, 1); // pop dummy string
 	}
 
-	I_OutputMsg("LUA_BaseLib: LREG_EXTVARS\n");
+	R36S_TRACE("LUA_BaseLib: LREG_EXTVARS\n");
 	lua_newtable(L);
 	lua_setfield(L, LUA_REGISTRYINDEX, LREG_EXTVARS);
 
-	I_OutputMsg("LUA_BaseLib: registering lib functions\n");
+	R36S_TRACE("LUA_BaseLib: registering lib functions\n");
 	// Set global functions
 	for (int k = 0; lib[k].name; k++)
 	{
-		I_OutputMsg("LUA_BaseLib: lib[%d] = %s\n", k, lib[k].name);
+		R36S_TRACE("LUA_BaseLib: lib[%d] = %s\n", k, lib[k].name);
 		lua_pushcfunction(L, lib[k].func);
 		lua_setfield(L, LUA_GLOBALSINDEX, lib[k].name);
-		I_OutputMsg("LUA_BaseLib: setfield %d ok\n", k);
+		R36S_TRACE("LUA_BaseLib: setfield %d ok\n", k);
 	}
-	I_OutputMsg("LUA_BaseLib: done\n");
+	R36S_TRACE("LUA_BaseLib: done\n");
 	return 0;
 }
