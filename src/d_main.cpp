@@ -368,6 +368,8 @@ namespace
 struct R36SPerf
 {
 	double logic = 0, display = 0, world3d = 0, report_t = 0;
+	double bsp = 0, planes = 0, masked = 0, portals = 0;   // inside the 3D render
+	double audio = 0, voice = 0, lua = 0, music = 0;        // end of loop work
 	unsigned tics = 0, iters = 0, displays = 0, worlds = 0;
 	bool have_report = false;
 	static double now()
@@ -1108,6 +1110,14 @@ void D_SRB2Loop(void)
 #ifdef SRB2_GLES2
 			g_r36s_perf.display += R36SPerf::now() - r36s_d0;
 			g_r36s_perf.displays++;
+			if (world)
+			{
+				double prec = static_cast<double>(I_GetPrecisePrecision());
+				g_r36s_perf.bsp += static_cast<double>(ps_bsptime) / prec;
+				g_r36s_perf.portals += static_cast<double>(ps_sw_portaltime) / prec;
+				g_r36s_perf.planes += static_cast<double>(ps_sw_planetime) / prec;
+				g_r36s_perf.masked += static_cast<double>(ps_sw_maskedtime) / prec;
+			}
 #endif
 		}
 
@@ -1123,15 +1133,32 @@ void D_SRB2Loop(void)
 			I_CaptureVideoFrame();
 
 		// consoleplayer -> displayplayers (hear sounds from viewpoint)
+#ifdef SRB2_GLES2
+		double r36s_x0 = R36SPerf::now();
+#endif
 		S_UpdateSounds(); // move positional sounds
+#ifdef SRB2_GLES2
+		double r36s_x1 = R36SPerf::now();
+		g_r36s_perf.audio += r36s_x1 - r36s_x0;
+#endif
 		NetVoiceUpdate(); // update voice recording whenever possible
+#ifdef SRB2_GLES2
+		double r36s_x2 = R36SPerf::now();
+		g_r36s_perf.voice += r36s_x2 - r36s_x1;
+#endif
 		if (realtics > 0 || singletics)
 		{
 			S_UpdateClosedCaptions();
 			S_TickSoundTest();
 		}
 
+#ifdef SRB2_GLES2
+		double r36s_x3 = R36SPerf::now();
+#endif
 		LUA_Step();
+#ifdef SRB2_GLES2
+		g_r36s_perf.lua += R36SPerf::now() - r36s_x3;
+#endif
 
 #ifdef HAVE_DISCORDRPC
 		if (! dedicated)
@@ -1140,8 +1167,14 @@ void D_SRB2Loop(void)
 		}
 #endif
 
+#ifdef SRB2_GLES2
+		double r36s_x4 = R36SPerf::now();
+#endif
 		Music_Tick();
 		S_UpdateVoicePositionalProperties();
+#ifdef SRB2_GLES2
+		g_r36s_perf.music += R36SPerf::now() - r36s_x4;
+#endif
 
 		// Fully completed frame made.
 		finishprecise = I_GetPreciseTime();
@@ -1172,7 +1205,14 @@ void D_SRB2Loop(void)
 					span, pf.iters, pf.tics, pf.tics / span, pf.logic * 1000.0, pf.logic * 1000.0 / tics_d,
 					pf.displays, pf.display * 1000.0, pf.worlds, pf.world3d * 1000.0, pf.world3d * 1000.0 / worlds_d,
 					span * 1000.0 - pf.logic * 1000.0 - pf.display * 1000.0);
+				std::fprintf(stderr,
+					"[r36s] PERF3D: bsp+paredes=%.0f ms portales=%.0f ms suelos(planes)=%.0f ms masked(sprites)=%.0f ms | "
+					"audio=%.0f ms voz=%.0f ms lua=%.0f ms musica=%.0f ms\n",
+					pf.bsp * 1000.0, pf.portals * 1000.0, pf.planes * 1000.0, pf.masked * 1000.0,
+					pf.audio * 1000.0, pf.voice * 1000.0, pf.lua * 1000.0, pf.music * 1000.0);
 				std::fflush(stderr);
+				pf.bsp = pf.portals = pf.planes = pf.masked = 0;
+				pf.audio = pf.voice = pf.lua = pf.music = 0;
 				pf.logic = pf.display = pf.world3d = 0;
 				pf.tics = pf.iters = pf.displays = pf.worlds = 0;
 				pf.report_t = r36s_now;
