@@ -360,8 +360,10 @@ INT16 wipetypepre = -1;
 INT16 wipetypepost = -1;
 
 #ifdef SRB2_GLES2
+#include <algorithm>
 #include <chrono>
 #include <cstdio>
+#include <vector>
 namespace
 {
 // R36S diagnostics: where does each frame go? (game logic vs 3D vs 2D/other)
@@ -1237,6 +1239,44 @@ void D_SRB2Loop(void)
 						pf.l_samples, pf.l_player * 1000.0 / n, pf.l_bot * 1000.0 / n, pf.l_thinkers * 1000.0 / n,
 						pf.l_mobjs * 1000.0 / n, pf.l_main * 1000.0 / n, pf.l_acs * 1000.0 / n, pf.l_luaframe * 1000.0 / n,
 						pf.l_checkpos / n, pf.l_luahooks / n);
+				}
+				if (gamestate == GS_LEVEL)
+				{
+					// Census of live objects: which mobj types are the most numerous / moving?
+					std::vector<unsigned> cnt(NUMMOBJTYPES, 0), mov(NUMMOBJTYPES, 0);
+					unsigned total = 0, moving = 0;
+					for (thinker_t* th = thlist[THINK_MOBJ].next; th != nullptr && th != &thlist[THINK_MOBJ]; th = th->next)
+					{
+						if (th->function.acp1 != (actionf_p1)P_MobjThinker)
+							continue;
+						mobj_t* mo = reinterpret_cast<mobj_t*>(th);
+						unsigned ty = static_cast<unsigned>(mo->type);
+						if (ty >= static_cast<unsigned>(NUMMOBJTYPES))
+							continue;
+						total++;
+						cnt[ty]++;
+						if (mo->momx != 0 || mo->momy != 0 || mo->momz != 0)
+						{
+							moving++;
+							mov[ty]++;
+						}
+					}
+					std::vector<unsigned> order;
+					for (unsigned t = 0; t < static_cast<unsigned>(NUMMOBJTYPES); t++)
+						if (cnt[t] > 0)
+							order.push_back(t);
+					std::sort(order.begin(), order.end(), [&](unsigned lhs, unsigned rhs)
+					{
+						return mov[lhs] != mov[rhs] ? mov[lhs] > mov[rhs] : cnt[lhs] > cnt[rhs];
+					});
+					std::fprintf(stderr, "[r36s] OBJETOS: total=%u en_movimiento=%u | top (tipo=total/moviendose):", total, moving);
+					for (size_t k = 0; k < order.size() && k < 10; k++)
+					{
+						unsigned t = order[k];
+						const char* nm = (t < static_cast<unsigned>(MT_FIRSTFREESLOT)) ? MOBJTYPE_LIST[t] : "(lua/custom)";
+						std::fprintf(stderr, " %s#%u=%u/%u", nm, t, cnt[t], mov[t]);
+					}
+					std::fprintf(stderr, "\n");
 				}
 				pf.l_player = pf.l_bot = pf.l_thinkers = pf.l_mobjs = pf.l_main = pf.l_acs = pf.l_luaframe = 0;
 				pf.l_checkpos = pf.l_luahooks = 0;
