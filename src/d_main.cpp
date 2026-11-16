@@ -370,6 +370,10 @@ struct R36SPerf
 	double logic = 0, display = 0, world3d = 0, report_t = 0;
 	double bsp = 0, planes = 0, masked = 0, portals = 0;   // inside the 3D render
 	double audio = 0, voice = 0, lua = 0, music = 0;        // end of loop work
+	// logic breakdown: sum of the LAST tic of each loop iteration (sampled) / samples
+	double l_player = 0, l_bot = 0, l_thinkers = 0, l_mobjs = 0, l_main = 0, l_acs = 0, l_luaframe = 0;
+	double l_checkpos = 0, l_luahooks = 0;
+	unsigned l_samples = 0;
 	unsigned tics = 0, iters = 0, displays = 0, worlds = 0;
 	bool have_report = false;
 	static double now()
@@ -1004,6 +1008,20 @@ void D_SRB2Loop(void)
 #ifdef SRB2_GLES2
 				g_r36s_perf.logic += R36SPerf::now() - r36s_l0;
 				g_r36s_perf.tics += static_cast<unsigned>(realtics);
+				{
+					double prec_l = static_cast<double>(I_GetPrecisePrecision());
+					R36SPerf& pl = g_r36s_perf;
+					pl.l_player += static_cast<double>(ps_playerthink_time) / prec_l;
+					pl.l_bot += static_cast<double>(ps_botticcmd_time) / prec_l;
+					pl.l_thinkers += static_cast<double>(ps_thinkertime) / prec_l;
+					pl.l_mobjs += static_cast<double>(ps_thlist_times[THINK_MOBJ]) / prec_l;
+					pl.l_main += static_cast<double>(ps_thlist_times[THINK_MAIN]) / prec_l;
+					pl.l_acs += static_cast<double>(ps_acs_time) / prec_l;
+					pl.l_luaframe += static_cast<double>(ps_lua_thinkframe_time) / prec_l;
+					pl.l_checkpos += static_cast<double>(ps_checkposition_calls);
+					pl.l_luahooks += static_cast<double>(ps_lua_mobjhooks);
+					pl.l_samples++;
+				}
 #endif
 			}
 
@@ -1210,6 +1228,19 @@ void D_SRB2Loop(void)
 					"audio=%.0f ms voz=%.0f ms lua=%.0f ms musica=%.0f ms\n",
 					pf.bsp * 1000.0, pf.portals * 1000.0, pf.planes * 1000.0, pf.masked * 1000.0,
 					pf.audio * 1000.0, pf.voice * 1000.0, pf.lua * 1000.0, pf.music * 1000.0);
+				if (pf.l_samples)
+				{
+					double n = static_cast<double>(pf.l_samples);
+					std::fprintf(stderr,
+						"[r36s] PERFLOGICA (media por tic, %u muestras): jugadores=%.1f ms bots(ticcmd)=%.1f ms thinkers=%.1f ms "
+						"(mobjs=%.1f main=%.1f) acs=%.1f ms lua_ThinkFrame=%.1f ms | checkposition=%.0f llamadas, hooks_lua_mobj=%.0f\n",
+						pf.l_samples, pf.l_player * 1000.0 / n, pf.l_bot * 1000.0 / n, pf.l_thinkers * 1000.0 / n,
+						pf.l_mobjs * 1000.0 / n, pf.l_main * 1000.0 / n, pf.l_acs * 1000.0 / n, pf.l_luaframe * 1000.0 / n,
+						pf.l_checkpos / n, pf.l_luahooks / n);
+				}
+				pf.l_player = pf.l_bot = pf.l_thinkers = pf.l_mobjs = pf.l_main = pf.l_acs = pf.l_luaframe = 0;
+				pf.l_checkpos = pf.l_luahooks = 0;
+				pf.l_samples = 0;
 				std::fflush(stderr);
 				pf.bsp = pf.portals = pf.planes = pf.masked = 0;
 				pf.audio = pf.voice = pf.lua = pf.music = 0;
