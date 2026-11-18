@@ -8533,6 +8533,15 @@ boolean P_LoadLevel(boolean fromnetsave, boolean reloadinggamestate)
 	levelloading = true;
 	g_reloadinggamestate = reloadinggamestate;
 
+	// Low-End Mode (from Ring Racers E): fixed for the whole course. Never while watching a
+	// replay, and never online (it changes the simulation, so all machines would have to agree).
+	{
+		extern int rr_lowend;
+		rr_lowend = (cv_rrlowend.value && !demo.playback && !netgame) ? 1 : 0;
+		I_OutputMsg("[LOWEND] %s on %s\n", rr_lowend ? "ON" : "off", G_BuildMapName(gamemap));
+		fprintf(stderr, "[r36s] LOWEND %s en %s\n", rr_lowend ? "ON" : "off", G_BuildMapName(gamemap));
+	}
+
 	// This is needed. Don't touch.
 	maptol = mapheaderinfo[gamemap-1]->typeoflevel;
 
