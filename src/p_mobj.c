@@ -216,6 +216,20 @@ static void P_CyclePlayerMobjState(mobj_t *mobj)
 	}
 }
 
+// R36S: leave the recursion counter exactly as the normal end of the function does.
+// Early returns (S_NULL removal, state jumps, objects removed by their own action) used
+// to skip "--recursion", so after the first one the counter stayed raised for the whole
+// session and EVERY state change cleared the 28 KB temporary table. On a slow CPU that
+// clear costs more than the state change itself. Same fix as Ring Racers E's
+// RRE_SEENSTATE_LEAVE (GPL-2.0+).
+#define R36S_SEENSTATE_LEAVE() \
+	do \
+	{ \
+		if (!--recursion) \
+			for (;(state = seenstate[i]) > S_NULL; i = state - 1) \
+				seenstate[i] = S_NULL; \
+	} while (0)
+
 //
 // P_SetPlayerMobjState
 // Returns true if the mobj is still present.
@@ -298,6 +312,7 @@ boolean P_SetPlayerMobjState(mobj_t *mobj, statenum_t state)
 		{ // Bad SOC!
 			CONS_Alert(CONS_ERROR, "Cannot remove player mobj by setting its state to S_NULL.\n");
 			//P_RemoveMobj(mobj);
+			R36S_SEENSTATE_LEAVE();
 			return false;
 		}
 
@@ -347,7 +362,11 @@ boolean P_SetPlayerMobjState(mobj_t *mobj, statenum_t state)
 					{
 						if (mobj->frame & FF_FRAMEMASK)
 							mobj->frame--;
-						return P_SetPlayerMobjState(mobj, st->var1);
+						{
+							statenum_t r36s_jump = (statenum_t)st->var1;
+							R36S_SEENSTATE_LEAVE();
+							return P_SetPlayerMobjState(mobj, r36s_jump);
+						}
 					}
 				}
 				else
@@ -381,7 +400,10 @@ boolean P_SetPlayerMobjState(mobj_t *mobj, statenum_t state)
 			// woah. a player was removed by an action.
 			// this sounds like a VERY BAD THING, but there's nothing we can do now...
 			if (P_MobjWasRemoved(mobj))
+			{
+				R36S_SEENSTATE_LEAVE();
 				return false;
+			}
 		}
 
 		seenstate[state] = 1 + st->nextstate;
@@ -424,6 +446,7 @@ boolean P_SetMobjState(mobj_t *mobj, statenum_t state)
 		if (state == S_NULL)
 		{
 			P_RemoveMobj(mobj);
+			R36S_SEENSTATE_LEAVE();
 			return false;
 		}
 
@@ -473,7 +496,11 @@ boolean P_SetMobjState(mobj_t *mobj, statenum_t state)
 					{
 						if (mobj->frame & FF_FRAMEMASK)
 							mobj->frame--;
-						return P_SetMobjState(mobj, st->var1);
+						{
+							statenum_t r36s_jump = (statenum_t)st->var1;
+							R36S_SEENSTATE_LEAVE();
+							return P_SetMobjState(mobj, r36s_jump);
+						}
 					}
 				}
 				else
@@ -502,7 +529,10 @@ boolean P_SetMobjState(mobj_t *mobj, statenum_t state)
 			astate = st;
 			st->action.acp1(mobj);
 			if (P_MobjWasRemoved(mobj))
+			{
+				R36S_SEENSTATE_LEAVE();
 				return false;
+			}
 		}
 
 		seenstate[state] = 1 + st->nextstate;
