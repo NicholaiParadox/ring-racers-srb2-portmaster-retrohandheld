@@ -464,6 +464,16 @@ consvar_t cv_scr_depth = Player("scr_depth", "16 bits").values({{8, "8 bits"}, {
 //added : 03-02-98: default screen mode, as loaded/saved in config
 consvar_t cv_scr_width = Player("scr_width", "640").values(CV_Unsigned);
 consvar_t cv_scr_height = Player("scr_height", "400").values(CV_Unsigned);
+// LOW-END MODE (lighter game logic, from Ring Racers E; see rr_config.h).
+// rr_lowend = value for the current course: latched in P_LoadLevel (off in replays and netgames).
+extern "C" int rr_lowend;
+int rr_lowend = 0;
+#ifdef SRB2_GLES2
+consvar_t cv_rrlowend = Player("rrlowend", "On").on_off();
+#else
+consvar_t cv_rrlowend = Player("rrlowend", "Off").on_off();
+#endif
+
 #ifdef SRB2_GLES2
 // R36S (Mali-G31): the plain nearest blit is by far the cheapest and safest shader.
 consvar_t cv_scr_effect = Player("scr_effect", "Nearest").values({{0, "Nearest"}, {1, "Sharp Bilinear"}, {2, "SalCRT"}, {3, "SalCRT Sharp"}}).save();
