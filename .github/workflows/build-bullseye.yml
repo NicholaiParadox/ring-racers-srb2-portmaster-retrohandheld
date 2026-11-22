@@ -1,6 +1,8 @@
 name: build-bullseye
-# Compila Ring Racers dentro de Debian 11 "bullseye" (glibc 2.31, igual que Ubuntu 20.04) sobre el runner ARM64
-# nativo de GitHub. El binario resultante corre en cualquier firmware de PortMaster con glibc >= 2.31.
+# Compila Ring Racers dentro de Ubuntu 20.04 (glibc 2.31, la misma que Debian 11 "bullseye") sobre el runner
+# ARM64 nativo de GitHub. Se usa Ubuntu 20.04 y no debian:bullseye porque Debian 11 ya es EOL: sus
+# actualizaciones de seguridad dan 404 en deb.debian.org.
+# El binario resultante corre en cualquier firmware de PortMaster con glibc >= 2.31.
 # Solo SDL2/EGL/GLES vienen del firmware; libpng y libopus se empaquetan en libs.aarch64/.
 # Se lanza a mano: Actions -> build-bullseye -> Run workflow.
 on:
@@ -9,19 +11,27 @@ jobs:
   build:
     runs-on: ubuntu-24.04-arm
     container:
-      image: debian:bullseye
+      image: ubuntu:20.04
+      env:
+        DEBIAN_FRONTEND: noninteractive
     steps:
       - name: Paquetes base
         run: |
           apt-get update
           apt-get install -y --no-install-recommends ca-certificates git curl wget xz-utils zip \
-            python3 python3-pip build-essential pkg-config ninja-build \
+            build-essential pkg-config ninja-build \
             libpng-dev zlib1g-dev libopus-dev libdrm-dev libgbm-dev libegl1-mesa-dev libgles2-mesa-dev \
             libasound2-dev libudev-dev
-          pip3 install cmake
           gcc --version | head -n1
-          cmake --version | head -n1
           ldd --version | head -n1
+
+      - name: CMake 3.28 (binario oficial aarch64)
+        run: |
+          wget -q https://github.com/Kitware/CMake/releases/download/v3.28.6/cmake-3.28.6-linux-aarch64.tar.gz
+          mkdir -p /opt/cmake
+          tar xf cmake-3.28.6-linux-aarch64.tar.gz -C /opt/cmake --strip-components=1
+          echo "/opt/cmake/bin" >> "$GITHUB_PATH"
+          /opt/cmake/bin/cmake --version | head -n1
 
       - uses: actions/checkout@v4
 
