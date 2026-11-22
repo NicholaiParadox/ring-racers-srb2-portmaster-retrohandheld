@@ -19,7 +19,7 @@ jobs:
         run: |
           apt-get update
           apt-get install -y --no-install-recommends ca-certificates git curl wget xz-utils zip \
-            build-essential pkg-config ninja-build \
+            build-essential pkg-config ninja-build patchelf \
             libpng-dev zlib1g-dev libopus-dev libdrm-dev libgbm-dev libegl1-mesa-dev libgles2-mesa-dev \
             libasound2-dev libudev-dev
           gcc --version | head -n1
