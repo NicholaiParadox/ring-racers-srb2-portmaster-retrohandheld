@@ -1,0 +1,60 @@
+name: build-bullseye
+# Compila Ring Racers dentro de Debian 11 "bullseye" (glibc 2.31, igual que Ubuntu 20.04) sobre el runner ARM64
+# nativo de GitHub. El binario resultante corre en cualquier firmware de PortMaster con glibc >= 2.31.
+# Solo SDL2/EGL/GLES vienen del firmware; libpng y libopus se empaquetan en libs.aarch64/.
+# Se lanza a mano: Actions -> build-bullseye -> Run workflow.
+on:
+  workflow_dispatch:
+jobs:
+  build:
+    runs-on: ubuntu-24.04-arm
+    container:
+      image: debian:bullseye
+    steps:
+      - name: Paquetes base
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends ca-certificates git curl wget xz-utils zip \
+            python3 python3-pip build-essential pkg-config ninja-build \
+            libpng-dev zlib1g-dev libopus-dev libdrm-dev libgbm-dev libegl1-mesa-dev libgles2-mesa-dev \
+            libasound2-dev libudev-dev
+          pip3 install cmake
+          gcc --version | head -n1
+          cmake --version | head -n1
+          ldd --version | head -n1
+
+      - uses: actions/checkout@v4
+
+      - name: SDL2 2.30 (solo para enlazar; en ejecucion se usa el SDL2 del firmware)
+        run: |
+          wget -q https://github.com/libsdl-org/SDL/releases/download/release-2.30.0/SDL2-2.30.0.tar.gz
+          tar xf SDL2-2.30.0.tar.gz
+          cmake -S SDL2-2.30.0 -B sdl-build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/opt/sdl2 -DSDL_SHARED=ON -DSDL_STATIC=OFF -DSDL_TEST=OFF \
+            -DSDL_X11=OFF -DSDL_WAYLAND=OFF -DSDL_PULSEAUDIO=OFF -DSDL_PIPEWIRE=OFF -DSDL_JACK=OFF \
+            -DSDL_SNDIO=OFF -DSDL_KMSDRM=ON -DSDL_OPENGLES=ON -DSDL_OPENGL=OFF -DSDL_VULKAN=OFF -DSDL_RPATH=OFF
+          cmake --build sdl-build
+          cmake --install sdl-build
+
+      - name: libcurl estatico minimo (sin TLS ni dependencias)
+        run: |
+          wget -q https://curl.se/download/curl-8.5.0.tar.xz
+          tar xf curl-8.5.0.tar.xz
+          cmake -S curl-8.5.0 -B curl-build -G Ninja -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_INSTALL_PREFIX=/opt/curl -DBUILD_SHARED_LIBS=OFF -DBUILD_CURL_EXE=OFF -DBUILD_TESTING=OFF \
+            -DCMAKE_POSITION_INDEPENDENT_CODE=ON -DCURL_ENABLE_SSL=OFF -DCURL_USE_OPENSSL=OFF \
+            -DCURL_ZLIB=OFF -DCURL_BROTLI=OFF -DCURL_ZSTD=OFF -DUSE_NGHTTP2=OFF -DCURL_USE_LIBPSL=OFF \
+            -DCURL_USE_LIBSSH2=OFF -DUSE_LIBIDN2=OFF -DCURL_DISABLE_LDAP=ON -DCURL_DISABLE_LDAPS=ON
+          cmake --build curl-build
+          cmake --install curl-build
+
+      - name: Compilar (glibc 2.31) y comprobar portabilidad
+        run: |
+          chmod +x build-r36s.sh packaging/r36s/*.sh
+          RR_PREFIX_PATH="/opt/sdl2;/opt/curl" ./build-r36s.sh bullseye
+          ./build-r36s.sh portmaster
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ringracers-bullseye
+          path: dist/*
