@@ -106,6 +106,14 @@ bundle-libs)
 		fi
 	done
 	ls -la "$BUILD_DIR/libs.aarch64"
+	# Make the executable look for the bundled libs next to itself, even if the launcher does not set
+	# LD_LIBRARY_PATH (RUNPATH is searched before the system library directories).
+	if command -v patchelf >/dev/null 2>&1; then
+		patchelf --set-rpath '$ORIGIN/libs.aarch64' "$BIN"
+		echo "==> RPATH: $(patchelf --print-rpath "$BIN")"
+	else
+		echo "WARNING: patchelf not found; the launcher must set LD_LIBRARY_PATH=<port>/libs.aarch64"
+	fi
 	;;
 package)
 	./build-r36s.sh package-only
